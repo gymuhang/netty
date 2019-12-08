@@ -15,17 +15,11 @@
  */
 package io.netty.bootstrap;
 
-import io.netty.channel.Channel;
-import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelFutureListener;
-import io.netty.channel.ChannelPipeline;
-import io.netty.channel.ChannelPromise;
-import io.netty.channel.EventLoop;
-import io.netty.channel.EventLoopGroup;
+import io.netty.channel.*;
 import io.netty.resolver.AddressResolver;
+import io.netty.resolver.AddressResolverGroup;
 import io.netty.resolver.DefaultAddressResolverGroup;
 import io.netty.resolver.NameResolver;
-import io.netty.resolver.AddressResolverGroup;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.FutureListener;
 import io.netty.util.internal.ObjectUtil;
@@ -35,8 +29,6 @@ import io.netty.util.internal.logging.InternalLoggerFactory;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
-import java.util.Map;
-import java.util.Map.Entry;
 
 /**
  * A {@link Bootstrap} that makes it easy to bootstrap a {@link Channel} to use
@@ -154,6 +146,7 @@ public class Bootstrap extends AbstractBootstrap<Bootstrap, Channel> {
      * @see #connect()
      */
     private ChannelFuture doResolveAndConnect(final SocketAddress remoteAddress, final SocketAddress localAddress) {
+        // 初始化 channel 并注册到 eventloop
         final ChannelFuture regFuture = initAndRegister();
         final Channel channel = regFuture.channel();
 
@@ -199,6 +192,7 @@ public class Bootstrap extends AbstractBootstrap<Bootstrap, Channel> {
                 return promise;
             }
 
+            //解析远程地址
             final Future<SocketAddress> resolveFuture = resolver.resolve(remoteAddress);
 
             if (resolveFuture.isDone()) {
@@ -252,6 +246,7 @@ public class Bootstrap extends AbstractBootstrap<Bootstrap, Channel> {
         });
     }
 
+    //将 Bootstrap 中保存的信息(handler/options/attrs)设置到新创建的 channel
     @Override
     @SuppressWarnings("unchecked")
     void init(Channel channel) {
@@ -262,6 +257,7 @@ public class Bootstrap extends AbstractBootstrap<Bootstrap, Channel> {
         setAttributes(channel, attrs0().entrySet().toArray(newAttrArray(0)));
     }
 
+    //重写了 validate() 方法 增加了对 handler 的检查
     @Override
     public Bootstrap validate() {
         super.validate();
@@ -282,6 +278,7 @@ public class Bootstrap extends AbstractBootstrap<Bootstrap, Channel> {
      * the given {@link EventLoopGroup}. This method is useful when making multiple {@link Channel}s with similar
      * settings.
      */
+    //深度克隆当前 Bootstrap 对象， 有完全一样的配置，但是使用给定的 EventLoopGroup。这个方法适合用相同配置创建多个Channel.
     public Bootstrap clone(EventLoopGroup group) {
         Bootstrap bs = new Bootstrap(this);
         bs.group = group;
