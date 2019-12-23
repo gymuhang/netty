@@ -28,6 +28,8 @@ public final class ThreadPerTaskExecutor implements Executor {
         this.threadFactory = threadFactory;
     }
 
+    //1.每次执行任务都会创建一个实体线程
+    //2.NioEventLoop 线程命名规则 nioEventLoop-1-xx
     @Override
     public void execute(Runnable command) {
         threadFactory.newThread(command).start();

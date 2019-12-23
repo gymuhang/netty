@@ -133,7 +133,9 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
         final Entry<ChannelOption<?>, Object>[] currentChildOptions =
                 childOptions.entrySet().toArray(newOptionArray(0));
         final Entry<AttributeKey<?>, Object>[] currentChildAttrs = childAttrs.entrySet().toArray(newAttrArray(0));
-
+        //channelInitializer 一次性初始化handler
+        //负责添加一个ServerBootstrapAcceptor handler 添加完后自己移除了
+        //serverBootStrapAcceptor handler：负责接收客户端连接创建连接之后，对连接初始化工作。
         p.addLast(new ChannelInitializer<Channel>() {
             @Override
             public void initChannel(final Channel ch) {

@@ -414,7 +414,9 @@ public class IdleStateHandler extends ChannelDuplexHandler {
      */
     private boolean hasOutputChanged(ChannelHandlerContext ctx, boolean first) {
         if (observeOutput) {
-
+            //正常情况下observeOutput = false 写空闲的判断中的写指写成功，但实际上有可能遇到以下情况
+            //1.写了但缓冲区满了写不进去；2.写了一个大“数据”，写确实在“动”，但没有成功。
+            //所以这个参数，判断是否有“写的意图”，而不是判断“是否写成功”。
             // We can take this shortcut if the ChannelPromises that got passed into write()
             // appear to complete. It indicates "change" on message level and we simply assume
             // that there's change happening on byte level. If the user doesn't observe channel

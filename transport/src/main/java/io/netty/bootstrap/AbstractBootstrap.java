@@ -270,7 +270,7 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
         if (regFuture.cause() != null) {
             return regFuture;
         }
-
+        //regFuture 是异步执行，需判断是否register 完成。把register 丢到 nio event loop里面执行去了，
         if (regFuture.isDone()) {
             // At this point we know that the registration was complete and successful.
             //此时，我们知道注册已经完成并且成功。
@@ -283,6 +283,7 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
             //通常这个时候注册的 future 应该已经万能充，但是万一没有，我们也需要处理
             // 创建一个 PendingRegistrationPromise
             final PendingRegistrationPromise promise = new PendingRegistrationPromise(channel);
+            //等着 register 完成后通知在执行bind
             regFuture.addListener(new ChannelFutureListener() {
                 @Override
                 public void operationComplete(ChannelFuture future) throws Exception {

@@ -262,17 +262,22 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
      * @return {@code null} if the executor thread has been interrupted or waken up.
      */
     protected Runnable takeTask() {
+        // 断言当前调用线程是event loop的工作线程,自我保护之一
         assert inEventLoop();
+        //检查当前taskQueue，如果不是 BlockingQueue 抛出异常退出
         if (!(taskQueue instanceof BlockingQueue)) {
             throw new UnsupportedOperationException();
         }
 
         BlockingQueue<Runnable> taskQueue = (BlockingQueue<Runnable>) this.taskQueue;
         for (;;) {
+            //从 scheduledTaskQueue 中取一个 scheduledTask, 注意方法是 peek(), 另外这个 task 有可能还没有到执行时间
             ScheduledFutureTask<?> scheduledTask = peekScheduledTask();
+            //如果 scheduledTask 为空，说明当前 scheduleTaskQueue 中没有定时任务；直接从 taskQueue 中拿任务即可
             if (scheduledTask == null) {
                 Runnable task = null;
                 try {
+                    //从 taskQueue 中取任务，如果没有任务会被堵塞，直到取到任务，或被 Interrupted
                     task = taskQueue.take();
                     if (task == WAKEUP_TASK) {
                         task = null;
@@ -282,12 +287,18 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
                 }
                 return task;
             } else {
+                //当前 scheduledTaskQueue 中定时任务，但这个定时任务可能还没到执行时间，需要检查 delayNanos
                 long delayNanos = scheduledTask.delayNanos();
                 Runnable task = null;
+                //delayNanos>0 定时任务没有到执行时间，需要从 taskQueue中取任务
                 if (delayNanos > 0) {
                     try {
+                        //从 taskQueue 取任务，如果没有任务则最多等待 delayNanos 时间，注意这里线程会被阻塞，如果 delayNanos 时间内有任务加入到 taskQueue
+                        //则可以实时取到这个任务，线程结束阻塞继续执行，这个 task 就可以返回了，如果delayNanos 时间内一直没有任务，则 timeout 后线程结束阻塞，poll() 返回null
                         task = taskQueue.poll(delayNanos, TimeUnit.NANOSECONDS);
                     } catch (InterruptedException e) {
+                        //还有一种可能 delayNanos 时间内被 waken up 比如有新的 scheduledTask 加入，delay 时间小于前面的 delayNanos，因此不能等待 delayNanos timeout
+                        //需要提前结束阻塞。
                         // Waken up.
                         return null;
                     }
@@ -297,11 +308,14 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
                     // scheduled tasks are never executed if there is always one task in the taskQueue.
                     // This is for example true for the read task of OIO Transport
                     // See https://github.com/netty/netty/issues/1614
+                    //继续尝试从 scheduledTaskQueue 取满足条件的 task 到 taskQueue中
                     fetchFromScheduledTaskQueue();
+                    //然后再从 taskQueue获取试试
                     task = taskQueue.poll();
                 }
 
                 if (task != null) {
+                    //只有 task 不为空时才返回并退出，否则前面的 for 循环一直循环
                     return task;
                 }
             }

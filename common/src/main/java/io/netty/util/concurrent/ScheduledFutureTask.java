@@ -108,6 +108,8 @@ final class ScheduledFutureTask<V> extends PromiseTask<V> implements ScheduledFu
         return deadlineToDelayNanos(deadlineNanos());
     }
 
+    //deadlineNanos() 表示任务计划要执行的时间点；deadlineNanos()方法返回的deadlineNanos属性在构造函数中被指定, 即在任务构造的时候指定任务计划执行的时间点, 这对于定时任务自然是合理的
+    //nanoTime() 取当前时间点；nanoTime()方法并没有直接调用System.nanoTime(), 而是先通过常量START_TIME中保存着类装载时的时间值, 然后nanoTime()方法中用每次取当前时间减去这个START_TIME, 返回其差值.
     static long deadlineToDelayNanos(long deadlineNanos) {
         return Math.max(0, deadlineNanos - nanoTime());
     }
@@ -116,6 +118,7 @@ final class ScheduledFutureTask<V> extends PromiseTask<V> implements ScheduledFu
         return Math.max(0, deadlineNanos() - (currentTimeNanos - START_TIME));
     }
 
+    //返回当前这个对象距离执行的延迟值，即还要多久就要执行了(所谓定时任务)
     @Override
     public long getDelay(TimeUnit unit) {
         return unit.convert(delayNanos(), TimeUnit.NANOSECONDS);

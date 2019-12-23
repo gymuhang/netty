@@ -15,8 +15,6 @@
  */
 package io.netty.buffer;
 
-import static io.netty.util.internal.ObjectUtil.checkPositiveOrZero;
-
 import io.netty.util.internal.PlatformDependent;
 
 import java.io.IOException;
@@ -28,6 +26,8 @@ import java.nio.channels.ClosedChannelException;
 import java.nio.channels.FileChannel;
 import java.nio.channels.GatheringByteChannel;
 import java.nio.channels.ScatteringByteChannel;
+
+import static io.netty.util.internal.ObjectUtil.checkPositiveOrZero;
 
 /**
  * A NIO {@link ByteBuffer} based buffer. It is recommended to use
@@ -62,6 +62,7 @@ public class UnpooledDirectByteBuf extends AbstractReferenceCountedByteBuf {
         }
 
         this.alloc = alloc;
+        //allocateDirect 分配堆外内存
         setByteBuffer(allocateDirect(initialCapacity), false);
     }
 
@@ -106,6 +107,7 @@ public class UnpooledDirectByteBuf extends AbstractReferenceCountedByteBuf {
      * Allocate a new direct {@link ByteBuffer} with the given initialCapacity.
      */
     protected ByteBuffer allocateDirect(int initialCapacity) {
+        //调用 JDK 的allocateDirect 来分配堆外内存
         return ByteBuffer.allocateDirect(initialCapacity);
     }
 

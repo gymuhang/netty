@@ -175,6 +175,7 @@ import java.lang.annotation.Target;
  * what fundamental differences they have, how they flow in a  pipeline,  and how to handle
  * the operation in your application.
  */
+//处理I/O 事件或者拦截I/O操作，并转发给它所在ChannelPipeline 中的下一个handler
 public interface ChannelHandler {
 
     /**

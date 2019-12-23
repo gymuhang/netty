@@ -41,6 +41,14 @@ public class ReflectiveChannelFactory<T extends Channel> implements ChannelFacto
     @Override
     public T newChannel() {
         try {
+            //https://github.com/netty/netty/pull/7125
+            //Calling newInstance() on a Class object can bypass compile time
+            // checked Exception propagation. This is noted in Java Puzzlers,
+            //as well as in ErrorProne:
+            //http://errorprone.info/bugpattern/ClassNewInstance
+            //Modifications:
+            //Use the niladic constructor to create a new instance.
+            //通过构造器 反射方法创建实例，
             return constructor.newInstance();
         } catch (Throwable t) {
             throw new ChannelException("Unable to create Channel from class " + constructor.getDeclaringClass(), t);

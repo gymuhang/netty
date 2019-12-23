@@ -57,6 +57,7 @@ public class NioEventLoopGroup extends MultithreadEventLoopGroup {
      * {@link SelectorProvider} which is returned by {@link SelectorProvider#provider()}.
      */
     public NioEventLoopGroup(int nThreads, ThreadFactory threadFactory) {
+        //默认 selector
         this(nThreads, threadFactory, SelectorProvider.provider());
     }
 
@@ -131,6 +132,7 @@ public class NioEventLoopGroup extends MultithreadEventLoopGroup {
         }
     }
 
+    //保存线程执行器 ThreadPreTaskExecutor;2.创建一个 MpscQueue; 3.创建一个 selector
     @Override
     protected EventLoop newChild(Executor executor, Object... args) throws Exception {
         EventLoopTaskQueueFactory queueFactory = args.length == 4 ? (EventLoopTaskQueueFactory) args[3] : null;

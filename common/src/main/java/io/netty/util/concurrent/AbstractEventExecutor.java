@@ -30,6 +30,9 @@ import java.util.concurrent.TimeUnit;
 /**
  * Abstract base class for {@link EventExecutor} implementations.
  */
+//从类继承结构上可以很清楚的看到AbstractEventExecutor的特别之处:
+//从jdk通用的Executor框架变成了netty的EventExecutor: 这里开始引入netty的东西比如Future/PromiseTask就理所当然了
+//增加了EventExecutor的支持, 自然EventExecutor里面定义的一些基本方法就可以在这里实现
 public abstract class AbstractEventExecutor extends AbstractExecutorService implements EventExecutor {
     private static final InternalLogger logger = InternalLoggerFactory.getInstance(AbstractEventExecutor.class);
 
@@ -134,6 +137,7 @@ public abstract class AbstractEventExecutor extends AbstractExecutorService impl
         return new PromiseTask<T>(this, callable);
     }
 
+    // 四个Schedule 方法直接抛出异常. 在 AbstractScheduledEventExecutor 中，这几个 schedule() 方法将被覆盖
     @Override
     public ScheduledFuture<?> schedule(Runnable command, long delay,
                                        TimeUnit unit) {
