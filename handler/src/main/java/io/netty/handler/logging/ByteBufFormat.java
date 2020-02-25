@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 The Netty Project
+ * Copyright 2020 The Netty Project
  *
  * The Netty Project licenses this file to you under the Apache License,
  * version 2.0 (the "License"); you may not use this file except in compliance
@@ -13,25 +13,24 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
-package io.netty.handler.codec.compression;
+package io.netty.handler.logging;
 
-import org.junit.Test;
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.ByteBufHolder;
+import io.netty.buffer.ByteBufUtil;
 
-public class ZlibCrossTest2 extends ZlibTest {
-
-    @Override
-    protected ZlibEncoder createEncoder(ZlibWrapper wrapper) {
-        return new JZlibEncoder(wrapper);
-    }
-
-    @Override
-    protected ZlibDecoder createDecoder(ZlibWrapper wrapper, int maxAllocation) {
-        return new JdkZlibDecoder(wrapper, maxAllocation);
-    }
-
-    @Test(expected = DecompressionException.class)
-    @Override
-    public void testZLIB_OR_NONE3() throws Exception {
-        super.testZLIB_OR_NONE3();
-    }
+/**
+ * Used to control the format and verbosity of logging for {@link ByteBuf}s and {@link ByteBufHolder}s.
+ *
+ * @see LoggingHandler
+ */
+public enum ByteBufFormat {
+    /**
+     * {@link ByteBuf}s will be logged in a simple format, with no hex dump included.
+     */
+    SIMPLE,
+    /**
+     * {@link ByteBuf}s will be logged using {@link ByteBufUtil#appendPrettyHexDump(StringBuilder, ByteBuf)}.
+     */
+    HEX_DUMP
 }
