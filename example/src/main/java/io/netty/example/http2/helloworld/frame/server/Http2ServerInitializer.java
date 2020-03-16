@@ -16,8 +16,8 @@
 
 package io.netty.example.http2.helloworld.frame.server;
 
+import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInboundHandler;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.SimpleChannelInboundHandler;
@@ -97,8 +97,9 @@ public class Http2ServerInitializer extends ChannelInitializer<SocketChannel> {
                 System.err.println("Directly talking: " + msg.protocolVersion() + " (no upgrade was attempted)");
                 ChannelPipeline pipeline = ctx.pipeline();
                 pipeline.addAfter(ctx.name(), null, new HelloWorldHttp1Handler("Direct. No Upgrade Attempted."));
-                pipeline.replace(this, null, new HttpObjectAggregator(maxHttpContentLength));
+                pipeline.addAfter(ctx.name(), null, new HttpObjectAggregator(maxHttpContentLength));
                 ctx.fireChannelRead(ReferenceCountUtil.retain(msg));
+                pipeline.remove(this);
             }
         });
 
@@ -108,7 +109,7 @@ public class Http2ServerInitializer extends ChannelInitializer<SocketChannel> {
     /**
      * Class that logs any User Events triggered on this channel.
      */
-    private static class UserEventLogger implements ChannelInboundHandler {
+    private static class UserEventLogger implements ChannelHandler {
         @Override
         public void userEventTriggered(ChannelHandlerContext ctx, Object evt) {
             System.out.println("User Event Triggered: " + evt);

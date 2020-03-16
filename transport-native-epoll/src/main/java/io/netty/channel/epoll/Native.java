@@ -32,6 +32,7 @@ import static io.netty.channel.epoll.NativeStaticallyReferencedJniMethods.epolle
 import static io.netty.channel.epoll.NativeStaticallyReferencedJniMethods.epollin;
 import static io.netty.channel.epoll.NativeStaticallyReferencedJniMethods.epollout;
 import static io.netty.channel.epoll.NativeStaticallyReferencedJniMethods.epollrdhup;
+import static io.netty.channel.epoll.NativeStaticallyReferencedJniMethods.isSupportingRecvmmsg;
 import static io.netty.channel.epoll.NativeStaticallyReferencedJniMethods.isSupportingSendmmsg;
 import static io.netty.channel.epoll.NativeStaticallyReferencedJniMethods.isSupportingTcpFastopen;
 import static io.netty.channel.epoll.NativeStaticallyReferencedJniMethods.kernelVersion;
@@ -67,6 +68,8 @@ public final class Native {
     public static final int EPOLLERR = epollerr();
 
     public static final boolean IS_SUPPORTING_SENDMMSG = isSupportingSendmmsg();
+    static final boolean IS_SUPPORTING_RECVMMSG = isSupportingRecvmmsg();
+
     public static final boolean IS_SUPPORTING_TCP_FASTOPEN = isSupportingTcpFastopen();
     public static final int TCP_MD5SIG_MAXKEYLEN = tcpMd5SigMaxKeyLen();
     public static final String KERNEL_VERSION = kernelVersion();
@@ -160,17 +163,6 @@ public final class Native {
         }
     }
     private static native int epollCtlDel0(int efd, int fd);
-
-    // File-descriptor operations
-    public static int splice(int fd, long offIn, int fdOut, long offOut, long len) throws IOException {
-        int res = splice0(fd, offIn, fdOut, offOut, len);
-        if (res >= 0) {
-            return res;
-        }
-        return ioResult("splice", res);
-    }
-
-    private static native int splice0(int fd, long offIn, int fdOut, long offOut, long len);
 
     @Deprecated
     public static int sendmmsg(int fd, NativeDatagramPacketArray.NativeDatagramPacket[] msgs,

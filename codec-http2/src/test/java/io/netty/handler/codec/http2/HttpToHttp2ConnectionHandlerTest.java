@@ -22,7 +22,6 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInboundHandler;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.ChannelPromise;
@@ -244,8 +243,8 @@ public class HttpToHttp2ConnectionHandlerTest {
         final HttpHeaders httpHeaders = request.headers();
         httpHeaders.setInt(HttpConversionUtil.ExtensionHeaderNames.STREAM_ID.text(), 5);
         final Http2Headers http2Headers =
-                new DefaultHttp2Headers().method(new AsciiString("CONNECT"))
-                                         .authority(new AsciiString("www.example.com:80"));
+                new DefaultHttp2Headers().method(new AsciiString("CONNECT")).path(new AsciiString("/"))
+                .scheme(new AsciiString("http")).authority(new AsciiString("www.example.com:80"));
 
         ChannelPromise writePromise = newPromise();
         verifyHeadersOnly(http2Headers, writePromise, clientChannel.writeAndFlush(request, writePromise));

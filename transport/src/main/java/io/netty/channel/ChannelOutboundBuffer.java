@@ -24,7 +24,6 @@ import io.netty.util.concurrent.FastThreadLocal;
 import io.netty.util.internal.InternalThreadLocalMap;
 import io.netty.util.internal.ObjectPool;
 import io.netty.util.internal.ObjectPool.Handle;
-import io.netty.util.internal.ObjectPool.ObjectCreator;
 import io.netty.util.internal.PromiseNotificationUtil;
 import io.netty.util.internal.SystemPropertyUtil;
 import io.netty.util.internal.logging.InternalLogger;
@@ -54,7 +53,7 @@ import static java.util.Objects.requireNonNull;
 public final class ChannelOutboundBuffer {
     // Assuming a 64-bit JVM:
     //  - 16 bytes object header
-    //  - 8 reference fields
+    //  - 6 reference fields
     //  - 2 long fields
     //  - 2 int fields
     //  - 1 boolean field
@@ -788,12 +787,7 @@ public final class ChannelOutboundBuffer {
     }
 
     static final class Entry {
-        private static final ObjectPool<Entry> RECYCLER = ObjectPool.newPool(new ObjectCreator<Entry>() {
-            @Override
-            public Entry newObject(Handle<Entry> handle) {
-                return new Entry(handle);
-            }
-        });
+        private static final ObjectPool<Entry> RECYCLER = ObjectPool.newPool(Entry::new);
 
         private final Handle<Entry> handle;
         Entry next;

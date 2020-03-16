@@ -36,6 +36,9 @@
 #include <inttypes.h>
 #include <link.h>
 #include <time.h>
+// Needed to be able to use syscalls directly and so not depend on newer GLIBC versions
+#include <linux/net.h>
+#include <sys/syscall.h>
 
 #include "netty_epoll_linuxsocket.h"
 #include "netty_unix_buffer.h"
@@ -54,16 +57,39 @@
 // optional
 extern int epoll_create1(int flags) __attribute__((weak));
 
-#ifdef IO_NETTY_SENDMMSG_NOT_FOUND
-extern int sendmmsg(int sockfd, struct mmsghdr* msgvec, unsigned int vlen, unsigned int flags) __attribute__((weak));
-
 #ifndef __USE_GNU
 struct mmsghdr {
     struct msghdr msg_hdr;  /* Message header */
     unsigned int  msg_len;  /* Number of bytes transmitted */
 };
 #endif
+
+// All linux syscall numbers are stable so this is safe.
+#ifndef SYS_recvmmsg
+// Only support SYS_recvmmsg for __x86_64__ / __i386__ for now
+#if defined(__x86_64__)
+// See https://github.com/torvalds/linux/blob/v5.4/arch/x86/entry/syscalls/syscall_64.tbl
+#define SYS_recvmmsg 299
+#elif defined(__i386__)
+// See https://github.com/torvalds/linux/blob/v5.4/arch/x86/entry/syscalls/syscall_32.tbl
+#define SYS_recvmmsg 337
+#else
+#define SYS_recvmmsg -1
 #endif
+#endif // SYS_recvmmsg
+
+#ifndef SYS_sendmmsg
+// Only support SYS_sendmmsg for __x86_64__ / __i386__ for now
+#if defined(__x86_64__)
+// See https://github.com/torvalds/linux/blob/v5.4/arch/x86/entry/syscalls/syscall_64.tbl
+#define SYS_sendmmsg 307
+#elif defined(__i386__)
+// See https://github.com/torvalds/linux/blob/v5.4/arch/x86/entry/syscalls/syscall_32.tbl
+#define SYS_sendmmsg 345
+#else
+#define SYS_sendmmsg -1
+#endif
+#endif // SYS_sendmmsg
 
 // Those are initialized in the init(...) method and cached for performance reasons
 static jfieldID packetAddrFieldId = NULL;
@@ -305,7 +331,8 @@ static jint netty_epoll_native_sendmmsg0(JNIEnv* env, jclass clazz, jint fd, jbo
     ssize_t res;
     int err;
     do {
-       res = sendmmsg(fd, msg, len, 0);
+       // We directly use the syscall to prevent depending on GLIBC 2.14.
+       res = syscall(SYS_sendmmsg, fd, msg, len, 0);
        // keep on writing if it was interrupted
     } while (res == -1 && ((err = errno) == EINTR));
 
@@ -336,8 +363,10 @@ static jint netty_epoll_native_recvmmsg0(JNIEnv* env, jclass clazz, jint fd, jbo
     ssize_t res;
     int err;
     do {
-       res = recvmmsg(fd, msg, len, 0, NULL);
-       // keep on reading if it was interrupted
+        // We directly use the syscall to prevent depending on GLIBC 2.12.
+        res = syscall(SYS_recvmmsg, fd, &msg, len, 0, NULL);
+
+        // keep on reading if it was interrupted
     } while (res == -1 && ((err = errno) == EINTR));
 
     if (res < 0) {
@@ -365,7 +394,8 @@ static jint netty_epoll_native_recvmmsg0(JNIEnv* env, jclass clazz, jint fd, jbo
 
               if (addrLen == 4) {
                   // IPV4 mapped IPV6 address
-                  (*env)->SetByteArrayRegion(env, address, 12, 4, (jbyte*) &ip6addr->sin6_addr.s6_addr);
+                  jbyte* addr = (jbyte*) &ip6addr->sin6_addr.s6_addr;
+                  (*env)->SetByteArrayRegion(env, address, 0, 4, addr + 12);
               } else {
                   (*env)->SetByteArrayRegion(env, address, 0, 16, (jbyte*) &ip6addr->sin6_addr.s6_addr);
               }
@@ -388,14 +418,28 @@ static jstring netty_epoll_native_kernelVersion(JNIEnv* env, jclass clazz) {
     netty_unix_errors_throwRuntimeExceptionErrorNo(env, "uname() failed: ", errno);
     return NULL;
 }
-
 static jboolean netty_epoll_native_isSupportingSendmmsg(JNIEnv* env, jclass clazz) {
-    // Use & to avoid warnings with -Wtautological-pointer-compare when sendmmsg is
-    // not weakly defined.
-    if (&sendmmsg != NULL) {
-        return JNI_TRUE;
+    if (SYS_sendmmsg == -1) {
+        return JNI_FALSE;
     }
-    return JNI_FALSE;
+    if (syscall(SYS_sendmmsg, -1, NULL, 0, 0) == -1) {
+        if (errno == ENOSYS) {
+            return JNI_FALSE;
+        }
+    }
+    return JNI_TRUE;
+}
+
+static jboolean netty_epoll_native_isSupportingRecvmmsg(JNIEnv* env, jclass clazz) {
+    if (SYS_recvmmsg == -1) {
+        return JNI_FALSE;
+    }
+    if (syscall(SYS_recvmmsg, -1, NULL, 0, 0, NULL) == -1) {
+        if (errno == ENOSYS) {
+            return JNI_FALSE;
+        }
+    }
+    return JNI_TRUE;
 }
 
 static jboolean netty_epoll_native_isSupportingTcpFastopen(JNIEnv* env, jclass clazz) {
@@ -435,25 +479,6 @@ static jint netty_epoll_native_offsetofEpollData(JNIEnv* env, jclass clazz) {
     return offsetof(struct epoll_event, data);
 }
 
-static jint netty_epoll_native_splice0(JNIEnv* env, jclass clazz, jint fd, jlong offIn, jint fdOut, jlong offOut, jlong len) {
-    ssize_t res;
-    int err;
-    loff_t off_in = (loff_t) offIn;
-    loff_t off_out = (loff_t) offOut;
-
-    loff_t* p_off_in = off_in >= 0 ? &off_in : NULL;
-    loff_t* p_off_out = off_out >= 0 ? &off_out : NULL;
-
-    do {
-       res = splice(fd, p_off_in, fdOut, p_off_out, (size_t) len, SPLICE_F_NONBLOCK | SPLICE_F_MOVE);
-       // keep on splicing if it was interrupted
-    } while (res == -1 && ((err = errno) == EINTR));
-
-    if (res < 0) {
-        return -err;
-    }
-    return (jint) res;
-}
 
 static jint netty_epoll_native_tcpMd5SigMaxKeyLen(JNIEnv* env, jclass clazz) {
     struct tcp_md5sig md5sig;
@@ -476,6 +501,7 @@ static const JNINativeMethod statically_referenced_fixed_method_table[] = {
   { "epollerr", "()I", (void *) netty_epoll_native_epollerr },
   { "tcpMd5SigMaxKeyLen", "()I", (void *) netty_epoll_native_tcpMd5SigMaxKeyLen },
   { "isSupportingSendmmsg", "()Z", (void *) netty_epoll_native_isSupportingSendmmsg },
+  { "isSupportingRecvmmsg", "()Z", (void *) netty_epoll_native_isSupportingRecvmmsg },
   { "isSupportingTcpFastopen", "()Z", (void *) netty_epoll_native_isSupportingTcpFastopen },
   { "kernelVersion", "()Ljava/lang/String;", (void *) netty_epoll_native_kernelVersion }
 };
@@ -495,8 +521,7 @@ static const JNINativeMethod fixed_method_table[] = {
   { "epollCtlDel0", "(II)I", (void *) netty_epoll_native_epollCtlDel0 },
   // "sendmmsg0" has a dynamic signature
   { "sizeofEpollEvent", "()I", (void *) netty_epoll_native_sizeofEpollEvent },
-  { "offsetofEpollData", "()I", (void *) netty_epoll_native_offsetofEpollData },
-  { "splice0", "(IJIJJ)I", (void *) netty_epoll_native_splice0 }
+  { "offsetofEpollData", "()I", (void *) netty_epoll_native_offsetofEpollData }
 };
 static const jint fixed_method_table_size = sizeof(fixed_method_table) / sizeof(fixed_method_table[0]);
 

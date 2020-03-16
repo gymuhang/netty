@@ -154,6 +154,21 @@ public class FlushConsolidationHandlerTest {
         assertFalse(channel.finish());
     }
 
+    /**
+     * See https://github.com/netty/netty/issues/9923
+     */
+    @Test
+    public void testResend() throws Exception {
+        final AtomicInteger flushCount = new AtomicInteger();
+        final EmbeddedChannel channel = newChannel(flushCount, true);
+        channel.writeAndFlush(1L).addListener(future -> channel.writeAndFlush(1L));
+        channel.flushOutbound();
+        assertEquals(1L, ((Long) channel.readOutbound()).longValue());
+        assertEquals(1L, ((Long) channel.readOutbound()).longValue());
+        assertNull(channel.readOutbound());
+        assertFalse(channel.finish());
+    }
+
     private static EmbeddedChannel newChannel(final AtomicInteger flushCount, boolean consolidateWhenNoReadInProgress) {
         return new EmbeddedChannel(
                 new ChannelHandler() {

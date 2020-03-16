@@ -35,7 +35,6 @@ import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
-import java.util.List;
 import java.util.Random;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
@@ -93,13 +92,6 @@ public final class Http2TestUtil {
         byte[] data = new byte[size];
         new Random().nextBytes(data);
         return data;
-    }
-
-    public static Http2Headers newHttp2HeadersWithRequestPseudoHeaders() {
-        return new DefaultHttp2Headers(true)
-            .method("GET")
-            .path("/")
-            .scheme("https");
     }
 
     /**
@@ -204,7 +196,7 @@ public final class Http2TestUtil {
         }
 
         @Override
-        protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
+        protected void decode(ChannelHandlerContext ctx, ByteBuf in) throws Exception {
             reader.readFrame(ctx, in, new Http2FrameListener() {
                 @Override
                 public int onDataRead(ChannelHandlerContext ctx, int streamId, ByteBuf data, int padding,
@@ -646,6 +638,10 @@ public final class Http2TestUtil {
 
     static ByteBuf bb(String s) {
         return ByteBufUtil.writeUtf8(UnpooledByteBufAllocator.DEFAULT, s);
+    }
+
+    static ByteBuf bb(int size) {
+        return UnpooledByteBufAllocator.DEFAULT.buffer().writeZero(size);
     }
 
     static void assertEqualsAndRelease(Http2Frame expected, Http2Frame actual) {

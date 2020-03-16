@@ -55,7 +55,6 @@ import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.DatagramChannel;
 import java.nio.channels.SocketChannel;
-import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledFuture;
@@ -861,11 +860,25 @@ public class SslHandler extends ByteToMessageDecoder {
                         case NOT_HANDSHAKING:
                             setHandshakeSuccessIfStillHandshaking();
                             // deliberate fall-through
-                        case NEED_WRAP:
-                            finishWrap(ctx, out, promise, inUnwrap, false);
+                        case NEED_WRAP: {
+                            ChannelPromise p = promise;
+
+                            // Null out the promise so it is not reused in the finally block in the cause of
+                            // finishWrap(...) throwing.
                             promise = null;
-                            out = null;
+                            final ByteBuf b;
+
+                            if (out.isReadable()) {
+                                // There is something in the out buffer. Ensure we null it out so it is not re-used.
+                                b = out;
+                                out = null;
+                            } else {
+                                // If out is not readable we can re-use it and so save an extra allocation
+                                b = null;
+                            }
+                            finishWrap(ctx, b, p, inUnwrap, false);
                             break;
+                        }
                         case NEED_UNWRAP:
                             needUnwrap = true;
                             return;
@@ -932,13 +945,10 @@ public class SslHandler extends ByteToMessageDecoder {
                 SSLEngineResult result = wrap(alloc, engine, Unpooled.EMPTY_BUFFER, out);
 
                 if (result.bytesProduced() > 0) {
-                    ctx.write(out).addListener(new ChannelFutureListener() {
-                        @Override
-                        public void operationComplete(ChannelFuture future) {
-                            Throwable cause = future.cause();
-                            if (cause != null) {
-                                setHandshakeFailureTransportFailure(ctx, cause);
-                            }
+                    ctx.write(out).addListener((ChannelFutureListener) future -> {
+                        Throwable cause = future.cause();
+                        if (cause != null) {
+                            setHandshakeFailureTransportFailure(ctx, cause);
                         }
                     });
                     if (inUnwrap) {
@@ -1081,7 +1091,8 @@ public class SslHandler extends ByteToMessageDecoder {
             if (logger.isDebugEnabled()) {
                 logger.debug(
                         "{} Swallowing a harmless 'connection reset by peer / broken pipe' error that occurred " +
-                        "while writing close_notify in response to the peer's close_notify", ctx.channel(), cause);
+                                "while writing close_notify in response to the peer's close_notify",
+                        ctx.channel(), cause);
             }
 
             // Close the connection explicitly just in case the transport
@@ -1091,6 +1102,11 @@ public class SslHandler extends ByteToMessageDecoder {
             }
         } else {
             ctx.fireExceptionCaught(cause);
+
+            if (cause instanceof SSLException ||
+                    ((cause instanceof DecoderException) && cause.getCause() instanceof SSLException)) {
+                ctx.close();
+            }
         }
     }
 
@@ -1151,8 +1167,10 @@ public class SslHandler extends ByteToMessageDecoder {
                         return true;
                     }
                 } catch (Throwable cause) {
-                    logger.debug("Unexpected exception while loading class {} classname {}",
-                                 getClass(), classname, cause);
+                    if (logger.isDebugEnabled()) {
+                        logger.debug("Unexpected exception while loading class {} classname {}",
+                                getClass(), classname, cause);
+                    }
                 }
             }
         }
@@ -1260,7 +1278,7 @@ public class SslHandler extends ByteToMessageDecoder {
     }
 
     @Override
-    protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws SSLException {
+    protected void decode(ChannelHandlerContext ctx, ByteBuf in) throws SSLException {
         if (processTask) {
             return;
         }
@@ -1868,7 +1886,7 @@ public class SslHandler extends ByteToMessageDecoder {
     }
 
     @Override
-    public void handlerAdded(final ChannelHandlerContext ctx) throws Exception {
+    public void handlerAdded0(final ChannelHandlerContext ctx) throws Exception {
         this.ctx = ctx;
 
         pendingUnencryptedWrites = new SslHandlerCoalescingBufferQueue(ctx.channel(), 16);
@@ -1981,7 +1999,8 @@ public class SslHandler extends ByteToMessageDecoder {
                 return;
             }
 
-            SSLException exception = new SSLException("handshake timed out");
+            SSLException exception =
+                    new SslHandshakeTimeoutException("handshake timed out after " + handshakeTimeoutMillis + "ms");
             try {
                 if (localHandshakePromise.tryFailure(exception)) {
                     SslUtils.handleHandshakeFailure(ctx, exception, true);
@@ -2046,9 +2065,13 @@ public class SslHandler extends ByteToMessageDecoder {
             }
             final long closeNotifyReadTimeout = closeNotifyReadTimeoutMillis;
             if (closeNotifyReadTimeout <= 0) {
-                // Trigger the close in all cases to make sure the promise is notified
-                // See https://github.com/netty/netty/issues/2358
-                addCloseListener(ctx.close(ctx.newPromise()), promise);
+                if (ctx.channel().isActive()) {
+                    // Trigger the close in all cases to make sure the promise is notified
+                    // See https://github.com/netty/netty/issues/2358
+                    addCloseListener(ctx.close(ctx.newPromise()), promise);
+                } else {
+                    promise.trySuccess();
+                }
             } else {
                 final ScheduledFuture<?> closeNotifyReadTimeoutFuture;
 
@@ -2072,7 +2095,11 @@ public class SslHandler extends ByteToMessageDecoder {
                     if (closeNotifyReadTimeoutFuture != null) {
                         closeNotifyReadTimeoutFuture.cancel(false);
                     }
-                    addCloseListener(ctx.close(ctx.newPromise()), promise);
+                    if (ctx.channel().isActive()) {
+                        addCloseListener(ctx.close(ctx.newPromise()), promise);
+                    } else {
+                        promise.trySuccess();
+                    }
                 });
             }
         });

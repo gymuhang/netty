@@ -323,11 +323,127 @@ public class HttpRequestDecoderTest {
 
     @Test
     public void testWhitespace() {
-        EmbeddedChannel channel = new EmbeddedChannel(new HttpRequestDecoder());
         String requestStr = "GET /some/path HTTP/1.1\r\n" +
                 "Transfer-Encoding : chunked\r\n" +
-                "Host: netty.io\n\r\n";
+                "Host: netty.io\r\n\r\n";
+        testInvalidHeaders0(requestStr);
+    }
 
+    @Test
+    public void testWhitespaceBeforeTransferEncoding01() {
+        String requestStr = "GET /some/path HTTP/1.1\r\n" +
+                " Transfer-Encoding : chunked\r\n" +
+                "Content-Length: 1\r\n" +
+                "Host: netty.io\r\n\r\n" +
+                "a";
+        testInvalidHeaders0(requestStr);
+    }
+
+    @Test
+    public void testWhitespaceBeforeTransferEncoding02() {
+        String requestStr = "POST / HTTP/1.1" +
+                " Transfer-Encoding : chunked\r\n" +
+                "Host: target.com" +
+                "Content-Length: 65\r\n\r\n" +
+                "0\r\n\r\n" +
+                "GET /maliciousRequest HTTP/1.1\r\n" +
+                "Host: evilServer.com\r\n" +
+                "Foo: x";
+        testInvalidHeaders0(requestStr);
+    }
+
+    @Test
+    public void testHeaderWithNoValueAndMissingColon() {
+        String requestStr = "GET /some/path HTTP/1.1\r\n" +
+                "Content-Length: 0\r\n" +
+                "Host:\r\n" +
+                "netty.io\r\n\r\n";
+        testInvalidHeaders0(requestStr);
+    }
+
+    @Test
+    public void testMultipleContentLengthHeaders() {
+        String requestStr = "GET /some/path HTTP/1.1\r\n" +
+                "Content-Length: 1\r\n" +
+                "Content-Length: 0\r\n\r\n" +
+                "b";
+        testInvalidHeaders0(requestStr);
+    }
+
+    @Test
+    public void testMultipleContentLengthHeaders2() {
+        String requestStr = "GET /some/path HTTP/1.1\r\n" +
+                "Content-Length: 1\r\n" +
+                "Connection: close\r\n" +
+                "Content-Length: 0\r\n\r\n" +
+                "b";
+        testInvalidHeaders0(requestStr);
+    }
+
+    @Test
+    public void testContentLengthHeaderWithCommaValue() {
+        String requestStr = "GET /some/path HTTP/1.1\r\n" +
+                "Content-Length: 1,1\r\n\r\n" +
+                "b";
+        testInvalidHeaders0(requestStr);
+    }
+
+    @Test
+    public void testMultipleContentLengthHeadersWithFolding() {
+        String requestStr = "POST / HTTP/1.1\r\n" +
+                "Host: example.com\r\n" +
+                "Connection: close\r\n" +
+                "Content-Length: 5\r\n" +
+                "Content-Length:\r\n" +
+                "\t6\r\n\r\n" +
+                "123456";
+        testInvalidHeaders0(requestStr);
+    }
+
+    @Test
+    public void testContentLengthAndTransferEncodingHeadersWithVerticalTab() {
+        testContentLengthAndTransferEncodingHeadersWithInvalidSeparator((char) 0x0b, false);
+        testContentLengthAndTransferEncodingHeadersWithInvalidSeparator((char) 0x0b, true);
+    }
+
+    @Test
+    public void testContentLengthAndTransferEncodingHeadersWithCR() {
+        testContentLengthAndTransferEncodingHeadersWithInvalidSeparator((char) 0x0d, false);
+        testContentLengthAndTransferEncodingHeadersWithInvalidSeparator((char) 0x0d, true);
+    }
+
+    private static void testContentLengthAndTransferEncodingHeadersWithInvalidSeparator(
+            char separator, boolean extraLine) {
+        String requestStr = "POST / HTTP/1.1\r\n" +
+                "Host: example.com\r\n" +
+                "Connection: close\r\n" +
+                "Content-Length: 9\r\n" +
+                "Transfer-Encoding:" + separator + "chunked\r\n\r\n" +
+                (extraLine ? "0\r\n\r\n" : "") +
+                "something\r\n\r\n";
+        testInvalidHeaders0(requestStr);
+    }
+
+    @Test
+    public void testContentLengthHeaderAndChunked() {
+        String requestStr = "POST / HTTP/1.1\r\n" +
+                "Host: example.com\r\n" +
+                "Connection: close\r\n" +
+                "Content-Length: 5\r\n" +
+                "Transfer-Encoding: chunked\r\n\r\n" +
+                "0\r\n\r\n";
+        EmbeddedChannel channel = new EmbeddedChannel(new HttpRequestDecoder());
+        assertTrue(channel.writeInbound(Unpooled.copiedBuffer(requestStr, CharsetUtil.US_ASCII)));
+        HttpRequest request = channel.readInbound();
+        assertFalse(request.decoderResult().isFailure());
+        assertTrue(request.headers().contains("Transfer-Encoding", "chunked", false));
+        assertFalse(request.headers().contains("Content-Length"));
+        LastHttpContent c = channel.readInbound();
+        assertFalse(channel.finish());
+    }
+
+    private static void testInvalidHeaders0(String requestStr) {
+        EmbeddedChannel channel = new EmbeddedChannel(new HttpRequestDecoder());
         assertTrue(channel.writeInbound(Unpooled.copiedBuffer(requestStr, CharsetUtil.US_ASCII)));
         HttpRequest request = channel.readInbound();
         assertTrue(request.decoderResult().isFailure());

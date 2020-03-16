@@ -16,6 +16,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <unistd.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -50,7 +51,7 @@ extern int accept4(int sockFd, struct sockaddr* addr, socklen_t* addrlen, int fl
 
 // macro to calculate the length of a sockaddr_un struct for a given path length.
 // see sys/un.h#SUN_LEN, this is modified to allow nul bytes
-#define _UNIX_ADDR_LENGTH(path_len) (uintptr_t) (((struct sockaddr_un *) 0)->sun_path) + path_len
+#define _UNIX_ADDR_LENGTH(path_len) ((uintptr_t) offsetof(struct sockaddr_un, sun_path) + (uintptr_t) path_len)
 
 static int nettyNonBlockingSocket(int domain, int type, int protocol) {
 #ifdef SOCK_NONBLOCK
@@ -389,6 +390,9 @@ static jobject _recvFrom(JNIEnv* env, jint fd, void* buffer, jint pos, jint limi
     }
 
 #ifdef IP_RECVORIGDSTADDR
+#if !defined(SOL_IP) && defined(IPPROTO_IP)
+#define SOL_IP IPPROTO_IP
+#endif /* !SOL_IP && IPPROTO_IP */
     if (readLocalAddr) {
         for (cmsg = CMSG_FIRSTHDR(&msg); cmsg != NULL; cmsg = CMSG_NXTHDR(&msg, cmsg)) {
             if (cmsg->cmsg_level == SOL_IP && cmsg->cmsg_type == IP_RECVORIGDSTADDR) {

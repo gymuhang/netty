@@ -468,7 +468,6 @@ public final class EpollDatagramChannel extends AbstractEpollChannel implements 
                 return;
             }
             final EpollRecvByteAllocatorHandle allocHandle = recvBufAllocHandle();
-            allocHandle.edgeTriggered(isFlagSet(Native.EPOLLET));
 
             final ChannelPipeline pipeline = pipeline();
             final ByteBufAllocator allocator = config.getAllocator();
@@ -483,7 +482,11 @@ public final class EpollDatagramChannel extends AbstractEpollChannel implements 
                         ByteBuf byteBuf = allocHandle.allocate(allocator);
                         final boolean read;
                         int datagramSize = config().getMaxDatagramPayloadSize();
-                        int numDatagram = datagramSize == 0 ? 1 : byteBuf.writableBytes() / datagramSize;
+
+                        // Only try to use recvmmsg if its really supported by the running system.
+                        int numDatagram = Native.IS_SUPPORTING_RECVMMSG ?
+                                datagramSize == 0 ? 1 : byteBuf.writableBytes() / datagramSize :
+                                0;
 
                         try {
                             if (numDatagram <= 1) {
@@ -667,9 +670,10 @@ public final class EpollDatagramChannel extends AbstractEpollChannel implements 
             if (localAddress == null) {
                 localAddress = localAddress();
             }
+            int received = remoteAddress.receivedAmount();
             allocHandle.lastBytesRead(maxDatagramPacketSize <= 0 ?
-                    remoteAddress.receivedAmount() : writable);
-            byteBuf.writerIndex(byteBuf.writerIndex() + allocHandle.lastBytesRead());
+                    received : writable);
+            byteBuf.writerIndex(writerIndex + received);
             allocHandle.incMessagesRead(1);
 
             pipeline().fireChannelRead(new DatagramPacket(byteBuf, localAddress, remoteAddress));

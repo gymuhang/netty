@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 The Netty Project
+ * Copyright 2020 The Netty Project
  *
  * The Netty Project licenses this file to you under the Apache License,
  * version 2.0 (the "License"); you may not use this file except in compliance
@@ -13,24 +13,16 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
-package io.netty.channel.epoll;
+package io.netty.handler.codec.compression;
 
-/**
- * The <a href="http://linux.die.net/man/7/epoll">epoll</a> mode to use.
- */
-public enum EpollMode {
+import io.netty.channel.embedded.EmbeddedChannel;
 
-    /**
-     * Use {@code EPOLLET} (edge-triggered).
-     *
-     * @see <a href="http://linux.die.net/man/7/epoll">man 7 epoll</a>.
-     */
-    EDGE_TRIGGERED,
+import static com.ning.compress.lzf.LZFChunk.MAX_CHUNK_LEN;
 
-    /**
-     * Do not use {@code EPOLLET} (level-triggered).
-     *
-     * @see <a href="http://linux.die.net/man/7/epoll">man 7 epoll</a>.
-     */
-    LEVEL_TRIGGERED
+public class LengthAwareLzfIntegrationTest extends LzfIntegrationTest {
+
+    @Override
+    protected EmbeddedChannel createEncoder() {
+        return new EmbeddedChannel(new LzfEncoder(false, MAX_CHUNK_LEN, 2 * 1024 * 1024));
+    }
 }

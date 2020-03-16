@@ -17,26 +17,26 @@ package io.netty.handler.codec.http.websocketx;
 
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
+import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelOutboundHandlerAdapter;
 import io.netty.channel.ChannelPromise;
 import io.netty.util.ReferenceCountUtil;
 import io.netty.util.concurrent.ScheduledFuture;
-import io.netty.util.internal.ObjectUtil;
 
 import java.nio.channels.ClosedChannelException;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 /**
  * Send {@link CloseWebSocketFrame} message on channel close, if close frame was not sent before.
  */
-final class WebSocketCloseFrameHandler extends ChannelOutboundHandlerAdapter {
+final class WebSocketCloseFrameHandler implements ChannelHandler {
     private final WebSocketCloseStatus closeStatus;
     private final long forceCloseTimeoutMillis;
     private ChannelPromise closeSent;
 
     WebSocketCloseFrameHandler(WebSocketCloseStatus closeStatus, long forceCloseTimeoutMillis) {
-        this.closeStatus = ObjectUtil.checkNotNull(closeStatus, "closeStatus");
+        this.closeStatus = Objects.requireNonNull(closeStatus, "closeStatus");
         this.forceCloseTimeoutMillis = forceCloseTimeoutMillis;
     }
 
@@ -51,12 +51,7 @@ final class WebSocketCloseFrameHandler extends ChannelOutboundHandlerAdapter {
         }
         flush(ctx);
         applyCloseSentTimeout(ctx);
-        closeSent.addListener(new ChannelFutureListener() {
-            @Override
-            public void operationComplete(ChannelFuture future) {
-                ctx.close(promise);
-            }
-        });
+        closeSent.addListener((ChannelFutureListener) future -> ctx.close(promise));
     }
 
     @Override
@@ -70,7 +65,7 @@ final class WebSocketCloseFrameHandler extends ChannelOutboundHandlerAdapter {
             promise = promise.unvoid();
             closeSent = promise;
         }
-        super.write(ctx, msg, promise);
+        ctx.write(msg, promise);
     }
 
     private void applyCloseSentTimeout(ChannelHandlerContext ctx) {
@@ -78,20 +73,12 @@ final class WebSocketCloseFrameHandler extends ChannelOutboundHandlerAdapter {
             return;
         }
 
-        final ScheduledFuture<?> timeoutTask = ctx.executor().schedule(new Runnable() {
-            @Override
-            public void run() {
-                if (!closeSent.isDone()) {
-                    closeSent.tryFailure(new WebSocketHandshakeException("send close frame timed out"));
-                }
+        final ScheduledFuture<?> timeoutTask = ctx.executor().schedule(() -> {
+            if (!closeSent.isDone()) {
+                closeSent.tryFailure(new WebSocketHandshakeException("send close frame timed out"));
             }
         }, forceCloseTimeoutMillis, TimeUnit.MILLISECONDS);
 
-        closeSent.addListener(new ChannelFutureListener() {
-            @Override
-            public void operationComplete(ChannelFuture future) {
-                timeoutTask.cancel(false);
-            }
-        });
+        closeSent.addListener((ChannelFutureListener) future -> timeoutTask.cancel(false));
     }
 }
