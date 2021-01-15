@@ -5,7 +5,7 @@
  * version 2.0 (the "License"); you may not use this file except in compliance
  * with the License. You may obtain a copy of the License at:
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *   https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
@@ -28,18 +28,19 @@ import javax.net.ssl.SSLException;
  */
 public abstract class OpenSslContext extends ReferenceCountedOpenSslContext {
     OpenSslContext(Iterable<String> ciphers, CipherSuiteFilter cipherFilter, ApplicationProtocolConfig apnCfg,
-                   int mode, Certificate[] keyCertChain,
+                   long sessionCacheSize, long sessionTimeout, int mode, Certificate[] keyCertChain,
                    ClientAuth clientAuth, String[] protocols, boolean startTls, boolean enableOcsp)
             throws SSLException {
-        super(ciphers, cipherFilter, apnCfg, mode, keyCertChain,
+        super(ciphers, cipherFilter, apnCfg, sessionCacheSize, sessionTimeout, mode, keyCertChain,
                 clientAuth, protocols, startTls, enableOcsp, false);
     }
 
     OpenSslContext(Iterable<String> ciphers, CipherSuiteFilter cipherFilter,
-                   OpenSslApplicationProtocolNegotiator apn, int mode, Certificate[] keyCertChain,
+                   OpenSslApplicationProtocolNegotiator apn, long sessionCacheSize,
+                   long sessionTimeout, int mode, Certificate[] keyCertChain,
                    ClientAuth clientAuth, String[] protocols, boolean startTls,
                    boolean enableOcsp) throws SSLException {
-        super(ciphers, cipherFilter, apn, mode, keyCertChain, clientAuth, protocols,
+        super(ciphers, cipherFilter, apn, sessionCacheSize, sessionTimeout, mode, keyCertChain, clientAuth, protocols,
                 startTls, enableOcsp, false);
     }
 

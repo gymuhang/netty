@@ -5,7 +5,7 @@
  * version 2.0 (the "License"); you may not use this file except in compliance
  * with the License. You may obtain a copy of the License at:
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *   https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
@@ -299,12 +299,15 @@ public class HttpPostStandardRequestDecoder implements InterfaceHttpPostRequestD
                     // which is not really usable for us as we may exceed it once we add more bytes.
                     buf.alloc().buffer(buf.readableBytes()).writeBytes(buf);
         } else {
+            int readPos = undecodedChunk.readerIndex();
+            int writable = undecodedChunk.writableBytes();
+            int toWrite = buf.readableBytes();
+            if (undecodedChunk.refCnt() == 1 && writable < toWrite && readPos + writable >= toWrite) {
+                undecodedChunk.discardReadBytes();
+            }
             undecodedChunk.writeBytes(buf);
         }
         parseBody();
-        if (undecodedChunk != null && undecodedChunk.writerIndex() > discardThreshold) {
-            undecodedChunk.discardReadBytes();
-        }
         return this;
     }
 

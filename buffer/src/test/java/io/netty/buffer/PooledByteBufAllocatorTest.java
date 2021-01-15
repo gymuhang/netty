@@ -5,7 +5,7 @@
  * version 2.0 (the "License"); you may not use this file except in compliance
  * with the License. You may obtain a copy of the License at:
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *   https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
@@ -634,5 +634,31 @@ public class PooledByteBufAllocatorTest extends AbstractByteBufAllocatorTest<Poo
     @SuppressWarnings("unchecked")
     private static PooledByteBuf<ByteBuffer> unwrapIfNeeded(ByteBuf buf) {
         return (PooledByteBuf<ByteBuffer>) (buf instanceof PooledByteBuf ? buf : buf.unwrap());
+    }
+
+    @Test
+    public void testCacheWorksForNormalAllocations() {
+        int maxCachedBufferCapacity = PooledByteBufAllocator.DEFAULT_MAX_CACHED_BUFFER_CAPACITY;
+        final PooledByteBufAllocator allocator =
+                new PooledByteBufAllocator(true, 1, 1,
+                        PooledByteBufAllocator.defaultPageSize(), PooledByteBufAllocator.defaultMaxOrder(),
+                        128, 128, true);
+        ByteBuf buffer = allocator.directBuffer(maxCachedBufferCapacity);
+        assertEquals(1, allocator.metric().directArenas().get(0).numNormalAllocations());
+        buffer.release();
+
+        buffer = allocator.directBuffer(maxCachedBufferCapacity);
+        // Should come out of the cache so the count should not be incremented
+        assertEquals(1, allocator.metric().directArenas().get(0).numNormalAllocations());
+        buffer.release();
+
+        // Should be allocated without cache and also not put back in a cache.
+        buffer = allocator.directBuffer(maxCachedBufferCapacity + 1);
+        assertEquals(2, allocator.metric().directArenas().get(0).numNormalAllocations());
+        buffer.release();
+
+        buffer = allocator.directBuffer(maxCachedBufferCapacity + 1);
+        assertEquals(3, allocator.metric().directArenas().get(0).numNormalAllocations());
+        buffer.release();
     }
 }

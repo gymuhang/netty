@@ -5,7 +5,7 @@
  * version 2.0 (the "License"); you may not use this file except in compliance
  * with the License. You may obtain a copy of the License at:
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *   https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
@@ -120,7 +120,8 @@ public final class OpenSsl {
         } else {
             // Test if netty-tcnative is in the classpath first.
             try {
-                Class.forName("io.netty.internal.tcnative.SSLContext", false, OpenSsl.class.getClassLoader());
+                Class.forName("io.netty.internal.tcnative.SSLContext", false,
+                        PlatformDependent.getClassLoader(OpenSsl.class));
             } catch (ClassNotFoundException t) {
                 cause = t;
                 logger.debug(
@@ -554,7 +555,9 @@ public final class OpenSsl {
 
     static long memoryAddress(ByteBuf buf) {
         assert buf.isDirect();
-        return buf.hasMemoryAddress() ? buf.memoryAddress() : Buffer.address(buf.nioBuffer());
+        return buf.hasMemoryAddress() ? buf.memoryAddress() :
+                // Use internalNioBuffer to reduce object creation.
+                Buffer.address(buf.internalNioBuffer(0, buf.readableBytes()));
     }
 
     private OpenSsl() { }
@@ -586,7 +589,7 @@ public final class OpenSsl {
         libNames.add(staticLibName + "_" + arch);
         libNames.add(staticLibName);
 
-        NativeLibraryLoader.loadFirstAvailable(SSLContext.class.getClassLoader(),
+        NativeLibraryLoader.loadFirstAvailable(PlatformDependent.getClassLoader(SSLContext.class),
             libNames.toArray(new String[0]));
     }
 

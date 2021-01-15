@@ -5,7 +5,7 @@
  * version 2.0 (the "License"); you may not use this file except in compliance
  * with the License. You may obtain a copy of the License at:
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *   https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
@@ -75,7 +75,7 @@ import static io.netty.buffer.ByteBufUtil.ensureWritableSuccess;
 import static io.netty.handler.ssl.SslUtils.getEncryptedPacketLength;
 
 /**
- * Adds <a href="http://en.wikipedia.org/wiki/Transport_Layer_Security">SSL
+ * Adds <a href="https://en.wikipedia.org/wiki/Transport_Layer_Security">SSL
  * &middot; TLS</a> and StartTLS support to a {@link Channel}.  Please refer
  * to the <strong>"SecureChat"</strong> example in the distribution or the web
  * site for the detailed usage.
@@ -113,7 +113,7 @@ import static io.netty.handler.ssl.SslUtils.getEncryptedPacketLength;
  *
  * <h3>Implementing StartTLS</h3>
  * <p>
- * <a href="http://en.wikipedia.org/wiki/STARTTLS">StartTLS</a> is the
+ * <a href="https://en.wikipedia.org/wiki/STARTTLS">StartTLS</a> is the
  * communication pattern that secures the wire in the middle of the plaintext
  * connection.  Please note that it is different from SSL &middot; TLS, that
  * secures the wire from the beginning of the connection.  Typically, StartTLS
@@ -851,7 +851,7 @@ public class SslHandler extends ByteToMessageDecoder implements ChannelOutboundH
                     if (exception == null) {
                         exception = sslClosePromise.cause();
                         if (exception == null) {
-                            exception = new SSLException("SSLEngine closed already");
+                            exception = new SslClosedEngineException("SSLEngine closed already");
                         }
                     }
                     promise.tryFailure(exception);
@@ -902,6 +902,13 @@ public class SslHandler extends ByteToMessageDecoder implements ChannelOutboundH
                                 b = null;
                             }
                             finishWrap(ctx, b, p, inUnwrap, false);
+                            // If we are expected to wrap again and we produced some data we need to ensure there
+                            // is something in the queue to process as otherwise we will not try again before there
+                            // was more added. Failing to do so may fail to produce an alert that can be
+                            // consumed by the remote peer.
+                            if (result.bytesProduced() > 0 && pendingUnencryptedWrites.isEmpty()) {
+                                pendingUnencryptedWrites.add(Unpooled.EMPTY_BUFFER);
+                            }
                             break;
                         }
                         case NEED_UNWRAP:
@@ -1793,17 +1800,24 @@ public class SslHandler extends ByteToMessageDecoder implements ChannelOutboundH
      * Notify all the handshake futures about the successfully handshake
      */
     private void setHandshakeSuccess() {
-        handshakePromise.trySuccess(ctx.channel());
+        boolean notified = handshakePromise.trySuccess(ctx.channel());
+        SSLSession session = engine.getSession();
 
-        if (logger.isDebugEnabled()) {
-            SSLSession session = engine.getSession();
-            logger.debug(
-              "{} HANDSHAKEN: protocol:{} cipher suite:{}",
-              ctx.channel(),
-              session.getProtocol(),
-              session.getCipherSuite());
+        // There seems to be a bug in the SSLEngineImpl that is part of the OpenJDK that results in returning
+        // HandshakeStatus.FINISHED multiple times which is not expected. This only happens in TLSv1.3 so lets
+        // ensure we only notify once in this case.
+        //
+        // This is safe as TLSv1.3 does not support renegotiation and so we should never see two handshake events.
+        if (notified || !SslUtils.PROTOCOL_TLS_V1_3.equals(session.getProtocol())) {
+            if (logger.isDebugEnabled()) {
+                logger.debug(
+                        "{} HANDSHAKEN: protocol:{} cipher suite:{}",
+                        ctx.channel(),
+                        session.getProtocol(),
+                        session.getCipherSuite());
+            }
+            ctx.fireUserEventTriggered(SslHandshakeCompletionEvent.SUCCESS);
         }
-        ctx.fireUserEventTriggered(SslHandshakeCompletionEvent.SUCCESS);
 
         if (readDuringHandshake && !ctx.channel().config().isAutoRead()) {
             readDuringHandshake = false;
