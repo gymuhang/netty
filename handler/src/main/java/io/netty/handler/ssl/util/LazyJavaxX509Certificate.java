@@ -13,7 +13,9 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
-package io.netty.handler.ssl;
+package io.netty.handler.ssl.util;
+
+import io.netty.util.internal.ObjectUtil;
 
 import javax.security.cert.CertificateException;
 import javax.security.cert.CertificateExpiredException;
@@ -28,12 +30,15 @@ import java.security.PublicKey;
 import java.security.SignatureException;
 import java.util.Date;
 
-final class OpenSslJavaxX509Certificate extends X509Certificate {
+public final class LazyJavaxX509Certificate extends X509Certificate {
     private final byte[] bytes;
     private X509Certificate wrapped;
 
-    OpenSslJavaxX509Certificate(byte[] bytes) {
-        this.bytes = bytes;
+    /**
+     * Creates a new instance which will lazy parse the given bytes. Be aware that the bytes will not be cloned.
+     */
+    public LazyJavaxX509Certificate(byte[] bytes) {
+        this.bytes = ObjectUtil.checkNotNull(bytes, "bytes");
     }
 
     @Override
@@ -94,6 +99,14 @@ final class OpenSslJavaxX509Certificate extends X509Certificate {
     @Override
     public byte[] getEncoded() {
         return bytes.clone();
+    }
+
+    /**
+     * Return the underyling {@code byte[]} without cloning it first. This {@code byte[]} <strong>must</strong> never
+     * be mutated.
+     */
+    byte[] getBytes() {
+        return bytes;
     }
 
     @Override

@@ -24,7 +24,7 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 
 /**
- * Contains classes that must be have public visibility but are not public API.
+ * Contains classes that must have public visibility but are not public API.
  */
 class Hidden {
 
@@ -117,6 +117,18 @@ class Hidden {
 
             builder.allowBlockingCallsInside(
                     "io.netty.resolver.dns.UnixResolverDnsServerAddressStreamProvider",
+                    "parse");
+
+            builder.allowBlockingCallsInside(
+                    "io.netty.resolver.dns.UnixResolverDnsServerAddressStreamProvider",
+                    "parseEtcResolverSearchDomains");
+
+            builder.allowBlockingCallsInside(
+                    "io.netty.resolver.dns.UnixResolverDnsServerAddressStreamProvider",
+                    "parseEtcResolverOptions");
+
+            builder.allowBlockingCallsInside(
+                    "io.netty.resolver.HostsFileParser",
                     "parse");
 
             builder.nonBlockingThreadPredicate(new Function<Predicate<Thread>, Predicate<Thread>>() {
