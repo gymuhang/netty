@@ -27,7 +27,6 @@ import io.netty.util.ReferenceCounted;
 import io.netty.util.ResourceLeakDetector;
 import io.netty.util.ResourceLeakDetectorFactory;
 import io.netty.util.ResourceLeakTracker;
-import io.netty.util.internal.ObjectUtil;
 import io.netty.util.internal.PlatformDependent;
 import io.netty.util.internal.StringUtil;
 import io.netty.util.internal.SuppressJava6Requirement;
@@ -66,6 +65,7 @@ import javax.net.ssl.X509TrustManager;
 import static io.netty.handler.ssl.OpenSsl.DEFAULT_CIPHERS;
 import static io.netty.handler.ssl.OpenSsl.availableJavaCipherSuites;
 import static io.netty.util.internal.ObjectUtil.checkNotNull;
+import static io.netty.util.internal.ObjectUtil.checkNonEmpty;
 import static io.netty.util.internal.ObjectUtil.checkPositiveOrZero;
 
 /**
@@ -84,8 +84,9 @@ public abstract class ReferenceCountedOpenSslContext extends SslContext implemen
     private static final int DEFAULT_BIO_NON_APPLICATION_BUFFER_SIZE = Math.max(1,
             SystemPropertyUtil.getInt("io.netty.handler.ssl.openssl.bioNonApplicationBufferSize",
                     2048));
+    // Let's use tasks by default but still allow the user to disable it via system property just in case.
     static final boolean USE_TASKS =
-            SystemPropertyUtil.getBoolean("io.netty.handler.ssl.openssl.useTasks", false);
+            SystemPropertyUtil.getBoolean("io.netty.handler.ssl.openssl.useTasks", true);
     private static final Integer DH_KEY_LENGTH;
     private static final ResourceLeakDetector<ReferenceCountedOpenSslContext> leakDetector =
             ResourceLeakDetectorFactory.instance().newResourceLeakDetector(ReferenceCountedOpenSslContext.class);
@@ -297,6 +298,11 @@ public abstract class ReferenceCountedOpenSslContext extends SslContext implemen
             int options = SSLContext.getOptions(ctx) |
                           SSL.SSL_OP_NO_SSLv2 |
                           SSL.SSL_OP_NO_SSLv3 |
+                          // Disable TLSv1 and TLSv1.1 by default as these are not considered secure anymore
+                          // and the JDK is doing the same:
+                          // https://www.oracle.com/java/technologies/javase/8u291-relnotes.html
+                          SSL.SSL_OP_NO_TLSv1 |
+                          SSL.SSL_OP_NO_TLSv1_1 |
 
                           SSL.SSL_OP_CIPHER_SERVER_PREFERENCE |
 
@@ -531,7 +537,7 @@ public abstract class ReferenceCountedOpenSslContext extends SslContext implemen
     @Deprecated
     @UnstableApi
     public final void setPrivateKeyMethod(OpenSslPrivateKeyMethod method) {
-        ObjectUtil.checkNotNull(method, "method");
+        checkNotNull(method, "method");
         Lock writerLock = ctxLock.writeLock();
         writerLock.lock();
         try {
@@ -861,9 +867,7 @@ public abstract class ReferenceCountedOpenSslContext extends SslContext implemen
             return 0;
         }
 
-        if (certChain.length == 0) {
-            throw new IllegalArgumentException("certChain can't be empty");
-        }
+        checkNonEmpty(certChain, "certChain");
 
         PemEncoded pem = PemX509Certificate.toPEM(allocator, true, certChain);
         try {

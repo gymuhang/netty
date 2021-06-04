@@ -281,6 +281,8 @@ static const JNINativeMethod fixed_method_table[] = {
 static const jint fixed_method_table_size = sizeof(fixed_method_table) / sizeof(fixed_method_table[0]);
 // JNI Method Registration Table End
 
+// IMPORTANT: If you add any NETTY_JNI_UTIL_LOAD_CLASS or NETTY_JNI_UTIL_FIND_CLASS calls you also need to update
+//            Native to reflect that.
 static jint netty_kqueue_native_JNI_OnLoad(JNIEnv* env, const char* packagePrefix) {
     int staticallyRegistered = 0;
     int nativeRegistered = 0;
@@ -341,21 +343,22 @@ error:
    return JNI_ERR;
 }
 
-static void netty_kqueue_native_JNI_OnUnload(JNIEnv* env, const char* packagePrefix) {
-    netty_kqueue_bsdsocket_JNI_OnUnLoad(env, packagePrefix);
-    netty_kqueue_eventarray_JNI_OnUnLoad(env, packagePrefix);
+static void netty_kqueue_native_JNI_OnUnload(JNIEnv* env) {
+    netty_kqueue_bsdsocket_JNI_OnUnLoad(env, staticPackagePrefix);
+    netty_kqueue_eventarray_JNI_OnUnLoad(env, staticPackagePrefix);
 
     if (register_unix_called == 1) {
         register_unix_called = 0;
         netty_unix_unregister(env, staticPackagePrefix);
     }
+
+    netty_jni_util_unregister_natives(env, staticPackagePrefix, STATICALLY_CLASSNAME);
+    netty_jni_util_unregister_natives(env, staticPackagePrefix, NATIVE_CLASSNAME);
+
     if (staticPackagePrefix != NULL) {
         free((void *) staticPackagePrefix);
         staticPackagePrefix = NULL;
     }
-
-    netty_jni_util_unregister_natives(env, packagePrefix, STATICALLY_CLASSNAME);
-    netty_jni_util_unregister_natives(env, packagePrefix, NATIVE_CLASSNAME);
 }
 
 // We build with -fvisibility=hidden so ensure we mark everything that needs to be visible with JNIEXPORT
